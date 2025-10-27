@@ -24,53 +24,24 @@ import { useDebounce } from '@/hooks/use-debounce';
 
 type SelectLabelType = React.ComponentProps<'select'> & React.ComponentProps<'label'>;
 
-const TOWN_CITY_OPTIONS = [
+const DEFAULT_TOWN_CITY_OPTIONS = [
   { name: 'All', value: 'all' },
   { name: 'London', value: 'london' }
 ];
 
 const PROPERTY_TYPE_OPTIONS = [
   { name: 'All', value: 'all' },
-  { name: 'Apartment', value: 'Apartment' },
-  { name: 'Flat', value: 'Flat' },
-  { name: 'Bungalow', value: 'Bungalow' },
-  { name: 'Detached', value: 'Detached' },
-  { name: 'Semi-Detached', value: 'Semi-Detached' },
-  { name: 'Terraced', value: 'Terraced' }
+  { name: 'Apartment', value: 'apartment' },
+  { name: 'Flat', value: 'flat' },
+  { name: 'Bungalow', value: 'bungalow' },
+  { name: 'Detached', value: 'detached' },
+  { name: 'Semi-Detached', value: 'semi-detached' },
+  { name: 'Terraced', value: 'terraced' }
 ];
 
 const COUNTRY_OPTIONS = [
   { name: 'All', value: 'all' },
-  { name: 'United kingdom', value: 'United kingdom' }
-];
-
-const filters = [
-  {
-    label: 'COUNTRY',
-    options: [
-      { name: 'All', value: 'all' },
-      { name: 'United kingdom', value: 'United kingdom' }
-    ]
-  },
-  {
-    label: 'TOWN CITY',
-    options: [
-      { name: 'All', value: 'all' },
-      { name: 'London', value: 'london' }
-    ]
-  },
-  {
-    label: 'Property Type',
-    options: [
-      { name: 'All', value: 'all' },
-      { name: 'Apartment', value: 'Apartment' },
-      { name: 'Flat', value: 'Flat' },
-      { name: 'Bungalow', value: 'Bungalow' },
-      { name: 'Detached', value: 'Detached' },
-      { name: 'Semi-Detached', value: 'Semi-Detached' },
-      { name: 'Terraced', value: 'Terraced' }
-    ]
-  }
+  { name: 'United kingdom', value: 'united kingdom' }
 ];
 
 const SEARCH_SUGGESTIONS = [
@@ -81,20 +52,40 @@ const SEARCH_SUGGESTIONS = [
   { title: 'Terraced on Elm Road', subtitle: 'Kensington • London • W8' }
 ];
 
-export default function FilterTabs() {
+const normalize = (v: string) =>
+  (v ?? '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
+
+export default function FilterTabs({
+  townCityOptions
+}: {
+  townCityOptions?: { name: string; value: string }[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const TOWN_CITY_OPTIONS = useMemo(
+    () =>
+      [{ name: 'All', value: 'all' }].concat(
+        townCityOptions && townCityOptions.length
+          ? townCityOptions
+          : DEFAULT_TOWN_CITY_OPTIONS.slice(1)
+      ),
+    [townCityOptions]
+  );
+
   const propertyPriceParams = searchParams?.get('propertyPrice');
   const tokenPriceParams = searchParams?.get('tokenPrice');
   const propertyTypeParams = searchParams?.get('propertyType');
+  const countryParams = searchParams?.get('country');
+  const cityParams = searchParams?.get('city');
+  const qParams = searchParams?.get('q') || '';
 
-  // Create query string
   const createQueryString = useCallback(
     (params: Record<string, string | number | null>) => {
       const newSearchParams = new URLSearchParams(searchParams?.toString());
       for (const [key, value] of Object.entries(params)) {
-        if (value === null) newSearchParams.delete(key);
+        if (value === null || value === '') newSearchParams.delete(key);
         else newSearchParams.set(key, String(value));
       }
       return newSearchParams.toString();
@@ -104,43 +95,99 @@ export default function FilterTabs() {
 
   const [propertyType, setPropertyType] = useState<string | null>(propertyTypeParams);
   useEffect(() => {
-    if (!propertyType) return;
+    if (propertyType == null) return;
     startTransition(() => {
-      const newQueryString = createQueryString({ propertyType });
-      router.push(`${pathname}?${newQueryString}`, { scroll: false });
+      const val = normalize(propertyType);
+      const qs = createQueryString({ propertyType: val === 'all' ? null : val });
+      router.push(`${pathname}?${qs}`, { scroll: false });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyType]);
 
   const isPropertyPrice = propertyPriceParams
-    ? propertyPriceParams?.split('-').map(Number)
+    ? propertyPriceParams.split('-').map(s => (s === '' ? null : Number(s)))
     : null;
-  const [propertyPrice, setPropertyPrice] = useState<number[] | null>(isPropertyPrice);
-  const debouncedPropertyPrice = useDebounce(propertyPrice, 1000);
+  const [propertyPrice, setPropertyPrice] = useState<(number | null)[] | null>(
+    isPropertyPrice as (number | null)[] | null
+  );
+  const debouncedPropertyPrice = useDebounce(propertyPrice, 700);
 
   useEffect(() => {
     if (!debouncedPropertyPrice) return;
-    const [min, max] = debouncedPropertyPrice;
+    const [min, max] = debouncedPropertyPrice as (number | null)[];
     startTransition(() => {
-      const newQueryString = createQueryString({ propertyPrice: `${min}-${max}` });
-      router.push(`${pathname}?${newQueryString}`, { scroll: false });
+      const hasAny = min != null || max != null;
+      const qs = createQueryString({
+        propertyPrice: hasAny ? `${min ?? ''}-${max ?? ''}` : null
+      });
+      router.push(`${pathname}?${qs}`, { scroll: false });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedPropertyPrice]);
 
-  const isTokenPrice = tokenPriceParams ? tokenPriceParams?.split('-').map(Number) : null;
-  const [tokenPrice, setTokenPrice] = useState<number[] | null>(isTokenPrice);
-  const debounceTokenPrice = useDebounce(tokenPrice, 1000);
+  const isTokenPrice = tokenPriceParams
+    ? tokenPriceParams.split('-').map(s => (s === '' ? null : Number(s)))
+    : null;
+  const [tokenPrice, setTokenPrice] = useState<(number | null)[] | null>(
+    (isTokenPrice as (number | null)[] | null) ?? [null, null]
+  );
+  const debounceTokenPrice = useDebounce(tokenPrice, 700);
 
   useEffect(() => {
     if (!debounceTokenPrice) return;
-    const [min, max] = debounceTokenPrice;
+    const [min, max] = debounceTokenPrice as (number | null)[];
     startTransition(() => {
-      const newQueryString = createQueryString({ tokenPrice: `${min}-${max}` });
-      router.push(`${pathname}?${newQueryString}`, { scroll: false });
+      const hasAny = min != null || max != null;
+      const qs = createQueryString({
+        tokenPrice: hasAny ? `${min ?? ''}-${max ?? ''}` : null
+      });
+      router.push(`${pathname}?${qs}`, { scroll: false });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounceTokenPrice]);
+
+  const [country, setCountry] = useState<string | null>(countryParams);
+  useEffect(() => {
+    if (country == null) return;
+    startTransition(() => {
+      const val = normalize(country);
+      const qs = createQueryString({ country: val === 'all' ? null : val });
+      router.push(`${pathname}?${qs}`, { scroll: false });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [country]);
+
+  const [city, setCity] = useState<string | null>(cityParams);
+  useEffect(() => {
+    if (city == null) return;
+    startTransition(() => {
+      const val = normalize(city);
+      const qs = createQueryString({ city: val === 'all' ? null : val });
+      router.push(`${pathname}?${qs}`, { scroll: false });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city]);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(qParams);
+  const debouncedQ = useDebounce(searchTerm, 400);
+
+  useEffect(() => {
+    startTransition(() => {
+      const val = normalize(debouncedQ);
+      const qs = createQueryString({ q: val ? val : null });
+      router.push(`${pathname}?${qs}`, { scroll: false });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQ]);
+
+  const filteredSuggestions = useMemo(() => {
+    const q = normalize(searchTerm);
+    if (!q) return SEARCH_SUGGESTIONS;
+    return SEARCH_SUGGESTIONS.filter(
+      s => s.title.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q)
+    );
+  }, [searchTerm]);
 
   useEffect(() => {
     function clearFilters() {
@@ -162,17 +209,8 @@ export default function FilterTabs() {
       });
     }
     clearFilters();
-  }, [propertyType, propertyPrice, tokenPrice]);
-
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const filteredSuggestions = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return SEARCH_SUGGESTIONS;
-    return SEARCH_SUGGESTIONS.filter(
-      s => s.title.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q)
-    );
-  }, [searchTerm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="w-full">
@@ -232,13 +270,13 @@ export default function FilterTabs() {
             label={'COUNTRY'}
             placeholder="Show all"
             options={COUNTRY_OPTIONS}
-            setOption={() => {}}
+            setOption={setCountry}
           />
           <FilterSelect
             label={'TOWN CITY'}
             placeholder="Show all"
             options={TOWN_CITY_OPTIONS}
-            setOption={() => {}}
+            setOption={setCity}
           />
           <FilterSelect
             label={'PROPERTY TYPE'}
@@ -262,10 +300,13 @@ export default function FilterTabs() {
                 label="Min (£)"
                 type="number"
                 inputMode="numeric"
-                value={tokenPrice ? tokenPrice[0] : 0}
+                value={tokenPrice ? (tokenPrice[0] ?? '') : ''}
                 onChange={e => {
-                  const value = Number(e.target.value);
-                  setTokenPrice([value, tokenPrice ? tokenPrice[1] : 0]);
+                  const raw = e.target.value;
+                  setTokenPrice([
+                    raw === '' ? null : Number(raw),
+                    tokenPrice ? tokenPrice[1] : null
+                  ]);
                 }}
               />
               <FilterInput
@@ -273,10 +314,13 @@ export default function FilterTabs() {
                 label="Max (£)"
                 type="number"
                 inputMode="numeric"
-                value={tokenPrice ? tokenPrice[1] : 10000}
+                value={tokenPrice ? (tokenPrice[1] ?? '') : ''}
                 onChange={e => {
-                  const value = Number(e.target.value);
-                  setTokenPrice([tokenPrice ? tokenPrice[0] : 0, value]);
+                  const raw = e.target.value;
+                  setTokenPrice([
+                    tokenPrice ? tokenPrice[0] : null,
+                    raw === '' ? null : Number(raw)
+                  ]);
                 }}
               />
             </PopoverContent>
@@ -292,10 +336,13 @@ export default function FilterTabs() {
               label="Min (£)"
               type="number"
               inputMode="numeric"
-              value={propertyPrice ? propertyPrice[0] : 0}
+              value={propertyPrice ? (propertyPrice[0] ?? '') : ''}
               onChange={e => {
-                const value = Number(e.target.value);
-                setPropertyPrice([value, propertyPrice ? propertyPrice[1] : 0]);
+                const raw = e.target.value;
+                setPropertyPrice([
+                  raw === '' ? null : Number(raw),
+                  propertyPrice ? propertyPrice[1] : null
+                ]);
               }}
             />
             <FilterInput
@@ -303,10 +350,13 @@ export default function FilterTabs() {
               label="Max (£)"
               type="number"
               inputMode="numeric"
-              value={propertyPrice ? propertyPrice[1] : 1000000}
+              value={propertyPrice ? (propertyPrice[1] ?? '') : ''}
               onChange={e => {
-                const value = Number(e.target.value);
-                setPropertyPrice([propertyPrice ? propertyPrice[0] : 0, value]);
+                const raw = e.target.value;
+                setPropertyPrice([
+                  propertyPrice ? propertyPrice[0] : null,
+                  raw === '' ? null : Number(raw)
+                ]);
               }}
             />
           </div>
@@ -333,7 +383,6 @@ const SelectButton = ({ label, className, placeholder, ...props }: SelectButtonP
         {...props}
       >
         {placeholder}
-
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="25"
@@ -353,23 +402,6 @@ const SelectButton = ({ label, className, placeholder, ...props }: SelectButtonP
   );
 };
 
-const ArrowDownIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="25"
-    height="24"
-    viewBox="0 0 25 24"
-    fill="none"
-  >
-    <path
-      d="M19.25 8.625L12.5 15.375L5.75 8.625"
-      stroke="#3B4F74"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
 export interface SelectProps extends SelectLabelType {
   label: string;
   options?: { name: string; value: string }[];
@@ -388,9 +420,7 @@ const FilterSelect = ({ label, options, placeholder, htmlFor, setOption }: Selec
       <Select
         onValueChange={value => {
           const selectedOption = options?.find(opt => opt.value === value);
-          if (selectedOption) {
-            setOption(selectedOption.value);
-          }
+          if (selectedOption) setOption(selectedOption.value);
         }}
       >
         <SelectTrigger>

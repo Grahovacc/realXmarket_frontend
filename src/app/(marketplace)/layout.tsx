@@ -4,9 +4,7 @@ import SubstrateContextProvider from '@/context/polkadot-contex';
 
 export default function MarketplaceLayout({
   children
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <SubstrateContextProvider>
       <div className="relative flex min-h-screen flex-col">

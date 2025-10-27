@@ -22,8 +22,66 @@ import { generatePresignedUrl } from '@/lib/s3';
 import { Button } from '@/components/ui/button';
 import { Suspense } from 'react';
 
+function getDetail<T = unknown>(obj: unknown, key: string): T | undefined {
+  if (obj && typeof obj === 'object' && key in (obj as Record<string, unknown>)) {
+    return (obj as Record<string, unknown>)[key] as T;
+  }
+  return undefined;
+}
+
+function toNumLoose(v: unknown): number | null {
+  if (v == null) return null;
+  const cleaned = String(v).replace(/[^0-9.\-]/g, '');
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function norm(v: unknown): string {
+  return (v ?? '').toString().normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function parseRange(v?: string): readonly [number | null, number | null] {
+  if (!v) return [null, null] as const;
+  const [a = '', b = ''] = v.split('-');
+  return [toNumLoose(a), toNumLoose(b)] as const;
+}
+
+function extractTokenPrice(listing: Listing, meta: any): number | null {
+  const c1 = getDetail<string>(listing.listing?.listingDetails, 'tokenPrice');
+  const c2 = getDetail<string>(listing.listing?.listingDetails, 'pricePerToken');
+  const c3 = meta?.price_per_token;
+  const c4 = meta?.token_price;
+  const c5 =
+    meta?.property_price != null && meta?.number_of_tokens != null
+      ? Number(meta.property_price) / Number(meta.number_of_tokens)
+      : null;
+
+  let price =
+    toNumLoose(c1) ??
+    toNumLoose(c2) ??
+    toNumLoose(c3) ??
+    toNumLoose(c4) ??
+    (typeof c5 === 'number' && Number.isFinite(c5) ? c5 : null);
+
+  if (price != null && price > 100_000) {
+    price = Math.round(price / 100);
+  }
+  return price;
+}
+
+function extractPropertyPrice(listing: Listing, meta: any): number | null {
+  const m1 = meta?.property_price ?? meta?.price ?? meta?.valuation;
+  const d1 = getDetail<unknown>(listing.listing?.listingDetails, 'propertyPrice');
+  return toNumLoose(m1) ?? toNumLoose(d1);
+}
+
 export const maxDuration = 300;
-export default async function Marketplace() {
+export default async function Marketplace({
+  searchParams
+}: {
+  searchParams?: Record<string, string>;
+}) {
   const data = await getAllOngoingListings();
   const assets = await getAllAssets();
 
@@ -98,9 +156,7 @@ export default async function Marketplace() {
                 );
               }
             }
-          } catch (error) {
-            // Error generating file URLs, continue with empty array
-          }
+          } catch (error) {}
 
           return {
             listing,
@@ -120,10 +176,86 @@ export default async function Marketplace() {
     (item): item is Listing => item !== undefined
   );
 
+  const townCitySet = new Map<string, string>();
+  for (const l of listings) {
+    try {
+      const meta = l.metadata ? JSON.parse(l.metadata) : {};
+      const raw = (meta.address_town_city || '').toString().trim();
+      if (!raw) continue;
+      const value = norm(raw);
+      const label = raw;
+      if (!townCitySet.has(value)) townCitySet.set(value, label);
+    } catch {}
+  }
+  const townCityOptions = Array.from(townCitySet.entries()).map(([value, name]) => ({
+    name,
+    value
+  }));
+
+  // ---- read URL params
+  const q = norm(searchParams?.q ?? '');
+  const propertyTypeParam = norm(searchParams?.propertyType ?? '');
+  const countryParam = norm(searchParams?.country ?? '');
+  const cityParam = norm(searchParams?.city ?? '');
+
+  const [ppMin, ppMax] = parseRange(searchParams?.propertyPrice);
+  const [tpMin, tpMax] = parseRange(searchParams?.tokenPrice);
+  // ----
+
+  const filtered = listings.filter(l => {
+    try {
+      const meta = l.metadata ? JSON.parse(l.metadata) : {};
+
+      const addressStreet = (meta.address_street || '').toString();
+      const addressTownCity = (meta.address_town_city || '').toString();
+      const address =
+        `${addressStreet}${addressStreet && addressTownCity ? ', ' : ''}${addressTownCity}`.toLowerCase();
+
+      const city = norm(addressTownCity);
+      const countryFromMeta = norm(meta.country);
+
+      const type =
+        norm(meta.property_type) ||
+        norm(meta.type) ||
+        norm(getDetail<string>(l.listing?.listingDetails, 'propertyType'));
+
+      const propPrice = extractPropertyPrice(l, meta);
+      const tokenPrice = extractTokenPrice(l, meta);
+
+      if (propertyTypeParam && propertyTypeParam !== 'all') {
+        const match = type.replace(/[^a-z]/g, '') === propertyTypeParam.replace(/[^a-z]/g, '');
+        if (!match) return false;
+      }
+
+      if (countryParam && countryParam !== 'all') {
+        if (countryFromMeta) {
+          if (!countryFromMeta.includes(countryParam)) return false;
+        }
+      }
+
+      if (cityParam && cityParam !== 'all' && !city.includes(cityParam)) return false;
+
+      if (ppMin != null && propPrice != null && propPrice < ppMin) return false;
+      if (ppMax != null && propPrice != null && propPrice > ppMax) return false;
+
+      if (tpMin != null && tokenPrice != null && tokenPrice < tpMin) return false;
+      if (tpMax != null && tokenPrice != null && tokenPrice > tpMax) return false;
+
+      if (q) {
+        const hay = `${l.listing?.listingId} ${address} ${type}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+
+      return true;
+    } catch {
+      return true;
+    }
+  });
+
   return (
     <Shell variant={'basic'} className="gap-10 pb-32">
       <Suspense fallback={<div>Loading filters...</div>}>
-        <FilterTabs />
+        <FilterTabs townCityOptions={townCityOptions} />
       </Suspense>
       <div className="flex flex-col gap-6 px-4 md:px-[50px]">
         <div className="flex w-full items-center justify-between">
@@ -141,12 +273,12 @@ export default async function Marketplace() {
           </div>
         </div>
 
-        {listings && listings.length >= 1 ? (
+        {filtered && filtered.length >= 1 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {listings.map(async listing => {
+            {filtered.map(async listing => {
               const data = JSON.parse(listing.metadata);
               const fileUrls = await Promise.all(
-                data.files
+                (data.files || [])
                   .filter((fileKey: string) => fileKey.split('/')[2] == 'property_image')
                   .map(async (fileKey: string) => await generatePresignedUrl(fileKey))
               );
@@ -165,7 +297,7 @@ export default async function Marketplace() {
                   key={listing.listing.listingId}
                   //   price={listing.listing.listingDetails.tokenPrice}
                   id={listing.listing.listingId}
-                  fileUrls={listing.fileUrls || []}
+                  fileUrls={listing.fileUrls || fileUrls || []}
                   details={listing.listing.listingDetails}
                   tokenRemaining={listing.tokenRemaining}
                   metaData={data}
