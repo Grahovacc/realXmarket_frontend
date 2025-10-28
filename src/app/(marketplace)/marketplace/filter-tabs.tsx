@@ -282,7 +282,7 @@ export default function FilterTabs({
                 label="Min (£)"
                 type="number"
                 inputMode="numeric"
-                value={tokenPrice ? (tokenPrice[0] ?? '') : ''}
+                value={tokenPrice ? tokenPrice[0] ?? '' : ''}
                 onChange={e => {
                   const raw = e.target.value;
                   setTokenPrice([
@@ -296,7 +296,7 @@ export default function FilterTabs({
                 label="Max (£)"
                 type="number"
                 inputMode="numeric"
-                value={tokenPrice ? (tokenPrice[1] ?? '') : ''}
+                value={tokenPrice ? tokenPrice[1] ?? '' : ''}
                 onChange={e => {
                   const raw = e.target.value;
                   setTokenPrice([
@@ -318,7 +318,7 @@ export default function FilterTabs({
               label="Min (£)"
               type="number"
               inputMode="numeric"
-              value={propertyPrice ? (propertyPrice[0] ?? '') : ''}
+              value={propertyPrice ? propertyPrice[0] ?? '' : ''}
               onChange={e => {
                 const raw = e.target.value;
                 setPropertyPrice([
@@ -332,7 +332,7 @@ export default function FilterTabs({
               label="Max (£)"
               type="number"
               inputMode="numeric"
-              value={propertyPrice ? (propertyPrice[1] ?? '') : ''}
+              value={propertyPrice ? propertyPrice[1] ?? '' : ''}
               onChange={e => {
                 const raw = e.target.value;
                 setPropertyPrice([

@@ -114,7 +114,7 @@ export default async function Marketplace({
 
         const metadataStr = metaData?.data?.startsWith?.('0x')
           ? hexToString(metaData.data)
-          : (metaData?.data ?? '');
+          : metaData?.data ?? '';
 
         let fileUrls: string[] = [];
         try {
