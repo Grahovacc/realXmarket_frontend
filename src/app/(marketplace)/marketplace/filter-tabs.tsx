@@ -24,11 +24,6 @@ import { useDebounce } from '@/hooks/use-debounce';
 
 type SelectLabelType = React.ComponentProps<'select'> & React.ComponentProps<'label'>;
 
-const DEFAULT_TOWN_CITY_OPTIONS = [
-  { name: 'All', value: 'all' },
-  { name: 'London', value: 'london' }
-];
-
 const PROPERTY_TYPE_OPTIONS = [
   { name: 'All', value: 'all' },
   { name: 'Apartment', value: 'apartment' },
@@ -44,21 +39,15 @@ const COUNTRY_OPTIONS = [
   { name: 'United kingdom', value: 'united kingdom' }
 ];
 
-const SEARCH_SUGGESTIONS = [
-  { title: '12 Baker Street', subtitle: 'Marylebone • London • W1U' },
-  { title: '221B Baker Street', subtitle: 'Marylebone • London • NW1' },
-  { title: 'Canary Wharf Penthouse', subtitle: 'Docklands • London • E14' },
-  { title: 'Riverside Flat', subtitle: 'Putney • London • SW15' },
-  { title: 'Terraced on Elm Road', subtitle: 'Kensington • London • W8' }
-];
-
 const normalize = (v: string) =>
   (v ?? '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
 
 export default function FilterTabs({
-  townCityOptions
+  townCityOptions,
+  suggestions
 }: {
   townCityOptions?: { name: string; value: string }[];
+  suggestions?: { title: string; subtitle: string }[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -67,9 +56,7 @@ export default function FilterTabs({
   const TOWN_CITY_OPTIONS = useMemo(
     () =>
       [{ name: 'All', value: 'all' }].concat(
-        townCityOptions && townCityOptions.length
-          ? townCityOptions
-          : DEFAULT_TOWN_CITY_OPTIONS.slice(1)
+        townCityOptions && townCityOptions.length ? townCityOptions : []
       ),
     [townCityOptions]
   );
@@ -83,12 +70,12 @@ export default function FilterTabs({
 
   const createQueryString = useCallback(
     (params: Record<string, string | number | null>) => {
-      const newSearchParams = new URLSearchParams(searchParams?.toString());
+      const next = new URLSearchParams(searchParams?.toString());
       for (const [key, value] of Object.entries(params)) {
-        if (value === null || value === '') newSearchParams.delete(key);
-        else newSearchParams.set(key, String(value));
+        if (value === null || value === '') next.delete(key);
+        else next.set(key, String(value));
       }
-      return newSearchParams.toString();
+      return next.toString();
     },
     [searchParams]
   );
@@ -101,8 +88,7 @@ export default function FilterTabs({
       const qs = createQueryString({ propertyType: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyType]);
+  }, [propertyType, createQueryString, pathname, router]);
 
   const isPropertyPrice = propertyPriceParams
     ? propertyPriceParams.split('-').map(s => (s === '' ? null : Number(s)))
@@ -122,8 +108,7 @@ export default function FilterTabs({
       });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedPropertyPrice]);
+  }, [debouncedPropertyPrice, createQueryString, pathname, router]);
 
   const isTokenPrice = tokenPriceParams
     ? tokenPriceParams.split('-').map(s => (s === '' ? null : Number(s)))
@@ -143,8 +128,7 @@ export default function FilterTabs({
       });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounceTokenPrice]);
+  }, [debounceTokenPrice, createQueryString, pathname, router]);
 
   const [country, setCountry] = useState<string | null>(countryParams);
   useEffect(() => {
@@ -154,8 +138,7 @@ export default function FilterTabs({
       const qs = createQueryString({ country: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [country]);
+  }, [country, createQueryString, pathname, router]);
 
   const [city, setCity] = useState<string | null>(cityParams);
   useEffect(() => {
@@ -165,8 +148,7 @@ export default function FilterTabs({
       const qs = createQueryString({ city: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [city]);
+  }, [city, createQueryString, pathname, router]);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState(qParams);
@@ -178,48 +160,48 @@ export default function FilterTabs({
       const qs = createQueryString({ q: val ? val : null });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQ]);
+  }, [debouncedQ, createQueryString, pathname, router]);
 
   const filteredSuggestions = useMemo(() => {
+    const source = suggestions ?? [];
     const q = normalize(searchTerm);
-    if (!q) return SEARCH_SUGGESTIONS;
-    return SEARCH_SUGGESTIONS.filter(
-      s => s.title.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q)
-    );
-  }, [searchTerm]);
+    if (!q) return source.slice(0, 20);
+    return source
+      .filter(s => s.title.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [searchTerm, suggestions]);
 
   useEffect(() => {
-    function clearFilters() {
-      startTransition(() => {
-        if (propertyType === 'all') {
-          router.push(`${pathname}?${createQueryString({ propertyType: null })}`, {
-            scroll: false
-          });
-          setPropertyType(null);
-        }
-        if (isPropertyPrice !== null && isPropertyPrice[1] === 0) {
-          router.push(`${pathname}?${createQueryString({ propertyPrice: null })}`);
-          setPropertyPrice(null);
-        }
-        if (isTokenPrice !== null && isTokenPrice[1] === 0) {
-          router.push(`${pathname}?${createQueryString({ tokenPrice: null })}`);
-          setTokenPrice(null);
-        }
-      });
-    }
-    clearFilters();
+    startTransition(() => {
+      if (propertyType === 'all') {
+        router.push(`${pathname}?${createQueryString({ propertyType: null })}`, {
+          scroll: false
+        });
+        setPropertyType(null);
+      }
+      if (isPropertyPrice !== null && isPropertyPrice[1] === 0) {
+        router.push(`${pathname}?${createQueryString({ propertyPrice: null })}`, {
+          scroll: false
+        });
+        setPropertyPrice(null);
+      }
+      if (isTokenPrice !== null && isTokenPrice[1] === 0) {
+        router.push(`${pathname}?${createQueryString({ tokenPrice: null })}`, {
+          scroll: false
+        });
+        setTokenPrice(null);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="w-full">
-      {/* Search section above filters */}
       <div className="hidden w-full px-4 pb-6 md:px-[50px] lg:block">
         <Popover open={searchOpen} onOpenChange={setSearchOpen}>
           <PopoverTrigger asChild>
             <div className="w-[520px]">
-              <SelectButton label="SEARCH" placeholder="Find by address, city or ID" />
+              <SelectButton label="SEARCH" placeholder="Find by property name or ID" />
             </div>
           </PopoverTrigger>
           <PopoverContent
@@ -255,7 +237,7 @@ export default function FilterTabs({
                   </ul>
                 ) : (
                   <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    No matches in demo data.
+                    No results.
                   </div>
                 )}
               </div>
@@ -267,19 +249,19 @@ export default function FilterTabs({
       <Popover>
         <div className="hidden w-full grid-cols-5 gap-6 border-b px-4 pb-10 md:px-[50px] lg:grid">
           <FilterSelect
-            label={'COUNTRY'}
+            label="COUNTRY"
             placeholder="Show all"
             options={COUNTRY_OPTIONS}
             setOption={setCountry}
           />
           <FilterSelect
-            label={'TOWN CITY'}
+            label="TOWN CITY"
             placeholder="Show all"
             options={TOWN_CITY_OPTIONS}
             setOption={setCity}
           />
           <FilterSelect
-            label={'PROPERTY TYPE'}
+            label="PROPERTY TYPE"
             placeholder="Show all"
             options={PROPERTY_TYPE_OPTIONS}
             setOption={setPropertyType}
@@ -289,11 +271,11 @@ export default function FilterTabs({
           </PopoverTrigger>
           <Popover>
             <PopoverTrigger>
-              <SelectButton label="Token Price" placeholder="Max Price" />
+              <SelectButton label="TOKEN PRICE" placeholder="Max Price" />
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="grid w-[506px] grid-cols-2 gap-6  rounded-lg px-3 py-[18px]"
+              className="grid w-[506px] grid-cols-2 gap-6 rounded-lg px-3 py-[18px]"
             >
               <FilterInput
                 name="min_token_price"
@@ -371,36 +353,34 @@ export interface SelectButtonProps extends ComponentPropsWithoutRef<'button'> {
   placeholder: string;
 }
 
-const SelectButton = ({ label, className, placeholder, ...props }: SelectButtonProps) => {
-  return (
-    <div className="isolate flex w-full flex-col gap-2">
-      {label ? <p className="text-[16px]/[24px] font-medium uppercase">{label}</p> : null}
-      <button
-        className={cn(
-          'flex w-full items-center justify-between rounded border border-primary/[0.50] bg-background px-3 py-2 font-sans text-[1rem]/[1.5rem] placeholder:text-[#717171] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
-          className
-        )}
-        {...props}
+const SelectButton = ({ label, className, placeholder, ...props }: SelectButtonProps) => (
+  <div className="isolate flex w-full flex-col gap-2">
+    {label ? <p className="text-[16px]/[24px] font-medium uppercase">{label}</p> : null}
+    <button
+      className={cn(
+        'flex w-full items-center justify-between rounded border border-primary/[0.50] bg-background px-3 py-2 font-sans text-[1rem]/[1.5rem] placeholder:text-[#717171] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+        className
+      )}
+      {...props}
+    >
+      {placeholder}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="25"
+        height="24"
+        viewBox="0 0 25 24"
+        fill="none"
       >
-        {placeholder}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="25"
-          height="24"
-          viewBox="0 0 25 24"
-          fill="none"
-        >
-          <path
-            d="M19.25 8.625L12.5 15.375L5.75 8.625"
-            stroke="#3B4F74"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-    </div>
-  );
-};
+        <path
+          d="M19.25 8.625L12.5 15.375L5.75 8.625"
+          stroke="#3B4F74"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  </div>
+);
 
 export interface SelectProps extends SelectLabelType {
   label: string;
@@ -409,33 +389,31 @@ export interface SelectProps extends SelectLabelType {
   setOption: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const FilterSelect = ({ label, options, placeholder, htmlFor, setOption }: SelectProps) => {
-  return (
-    <div className="isolate flex w-full flex-col gap-2">
-      {label ? (
-        <label htmlFor={htmlFor} className="text-[16px]/[24px] font-medium uppercase">
-          {label}
-        </label>
-      ) : null}
-      <Select
-        onValueChange={value => {
-          const selectedOption = options?.find(opt => opt.value === value);
-          if (selectedOption) setOption(selectedOption.value);
-        }}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {options?.map((option, index) => (
-              <SelectItem key={index} value={option.value}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
-  );
-};
+const FilterSelect = ({ label, options, placeholder, htmlFor, setOption }: SelectProps) => (
+  <div className="isolate flex w-full flex-col gap-2">
+    {label ? (
+      <label htmlFor={htmlFor} className="text-[16px]/[24px] font-medium uppercase">
+        {label}
+      </label>
+    ) : null}
+    <Select
+      onValueChange={value => {
+        const selectedOption = options?.find(opt => opt.value === value);
+        if (selectedOption) setOption(selectedOption.value);
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options?.map((option, index) => (
+            <SelectItem key={index} value={option.value}>
+              {option.name}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  </div>
+);
