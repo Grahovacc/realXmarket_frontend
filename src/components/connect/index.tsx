@@ -1,2 +1,2 @@
-export * from './wallet-modal'
-export * from './connect-button'
+export * from './wallet-modal';
+export * from './connect-button';
