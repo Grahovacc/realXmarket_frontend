@@ -20,7 +20,9 @@ function getDetail<T = unknown>(obj: unknown, key: string): T | undefined {
   return undefined;
 }
 
-function toNumLoose(v: unknown): number | null {
+// Extracts a number from any input.
+// Example: "€ 1,234.50" becomes "1234.50"
+function extractNumber(v: unknown): number | null {
   if (v == null) return null;
   const cleaned = String(v).replace(/[^0-9.\-]/g, '');
   if (!cleaned) return null;
@@ -32,10 +34,12 @@ function norm(v: unknown): string {
   return (v ?? '').toString().normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+// Parses a range from a URL query parameter.
+// Example: "propertyPrice=300000-500000" -> [300000, 500000]
 function parseRange(v?: string): readonly [number | null, number | null] {
   if (!v) return [null, null] as const;
   const [a = '', b = ''] = v.split('-');
-  return [toNumLoose(a), toNumLoose(b)] as const;
+  return [extractNumber(a), extractNumber(b)] as const;
 }
 
 function parseTokenPriceLikeDisplayed(raw: unknown): number | null {
@@ -59,6 +63,7 @@ function parseTokenPriceLikeDisplayed(raw: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// TODO: rename
 function extractTokenPrice(listing: Listing, meta: any): number | null {
   const candidates = [
     getDetail<string>(listing.listing?.listingDetails, 'tokenPrice'),
@@ -70,8 +75,8 @@ function extractTokenPrice(listing: Listing, meta: any): number | null {
     const parsed = parseTokenPriceLikeDisplayed(c);
     if (parsed != null) return parsed;
   }
-  const pp = toNumLoose(meta?.property_price);
-  const count = toNumLoose(meta?.number_of_tokens);
+  const pp = extractNumber(meta?.property_price);
+  const count = extractNumber(meta?.number_of_tokens);
   if (pp != null && count != null && count > 0) return pp / count;
   return null;
 }
@@ -79,7 +84,7 @@ function extractTokenPrice(listing: Listing, meta: any): number | null {
 function extractPropertyPrice(listing: Listing, meta: any): number | null {
   const m1 = meta?.property_price ?? meta?.price ?? meta?.valuation;
   const d1 = getDetail<unknown>(listing.listing?.listingDetails, 'propertyPrice');
-  return toNumLoose(m1) ?? toNumLoose(d1);
+  return extractNumber(m1) ?? extractNumber(d1);
 }
 
 export const maxDuration = 300;
@@ -89,18 +94,18 @@ export default async function Marketplace({
 }: {
   searchParams?: Record<string, string>;
 }) {
-  const raw = await getAllOngoingListings();
+  const rawListings = await getAllOngoingListings();
   await getAllAssets();
 
-  const prepared: Array<
+  const listingData: Array<
     Listing & {
       fileUrls: string[];
       isExpired: boolean;
     }
   > = (
     await Promise.all(
-      raw.map(async (base: any) => {
-        if (!base?.listingDetails || typeof base.listingDetails !== 'object') return undefined;
+      rawListings.map(async (base: any) => {
+        if (!base?.listingDetails || typeof base.tingDetails !== 'object') return undefined;
 
         const blockNumber = Number(
           String(base.listingDetails.listingExpiry || '').replace(/,/g, '')
@@ -142,7 +147,7 @@ export default async function Marketplace({
     )
   ).filter(Boolean) as any;
 
-  const baseVisible = prepared.filter(x => !x.isExpired);
+  const baseVisible = listingData.filter(x => !x.isExpired);
 
   const townCitySet = new Map<string, string>();
   for (const l of baseVisible) {
