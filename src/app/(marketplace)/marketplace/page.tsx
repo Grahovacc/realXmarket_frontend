@@ -5,87 +5,14 @@ import {
   getAllOngoingListings,
   getItemMetadata
 } from '@/lib/queries';
-import { Listing } from '@/types';
+import { Listing, ListingDetails } from '@/types';
 import FilterTabs from './filter-tabs';
 import { hexToString } from '@/lib/utils';
 import { Shell } from '@/components/shell';
 import { generatePresignedUrl } from '@/lib/s3';
 import { Button } from '@/components/ui/button';
 import { Suspense } from 'react';
-
-function getDetail<T = unknown>(obj: unknown, key: string): T | undefined {
-  if (obj && typeof obj === 'object' && key in (obj as Record<string, unknown>)) {
-    return (obj as Record<string, unknown>)[key] as T;
-  }
-  return undefined;
-}
-
-// Extracts a number from any input.
-// Example: "€ 1,234.50" becomes "1234.50"
-function extractNumber(v: unknown): number | null {
-  if (v == null) return null;
-  const cleaned = String(v).replace(/[^0-9.\-]/g, '');
-  if (!cleaned) return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
-}
-
-function norm(v: unknown): string {
-  return (v ?? '').toString().normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-// Parses a range from a URL query parameter.
-// Example: "propertyPrice=300000-500000" -> [300000, 500000]
-function parseRange(v?: string): readonly [number | null, number | null] {
-  if (!v) return [null, null] as const;
-  const [a = '', b = ''] = v.split('-');
-  return [extractNumber(a), extractNumber(b)] as const;
-}
-
-function parseTokenPriceLikeDisplayed(raw: unknown): number | null {
-  if (raw == null) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-
-  const cleaned = s.replace(/[^\d.,-]/g, '');
-  const normalized = cleaned.replace(/,/g, '');
-  const n = Number(normalized);
-  if (Number.isFinite(n) && n > 0 && n < 1e6) return n;
-
-  const justDigits = s.replace(/\D/g, '');
-  if (justDigits && justDigits.length > 5) {
-    const micro = Number(justDigits);
-    if (Number.isFinite(micro)) {
-      const scaled = micro / 1_000_000;
-      return Number.isFinite(scaled) ? scaled : null;
-    }
-  }
-  return Number.isFinite(n) ? n : null;
-}
-
-// TODO: rename
-function extractTokenPrice(listing: Listing, meta: any): number | null {
-  const candidates = [
-    getDetail<string>(listing.listing?.listingDetails, 'tokenPrice'),
-    getDetail<string>(listing.listing?.listingDetails, 'pricePerToken'),
-    meta?.price_per_token,
-    meta?.token_price
-  ];
-  for (const c of candidates) {
-    const parsed = parseTokenPriceLikeDisplayed(c);
-    if (parsed != null) return parsed;
-  }
-  const pp = extractNumber(meta?.property_price);
-  const count = extractNumber(meta?.number_of_tokens);
-  if (pp != null && count != null && count > 0) return pp / count;
-  return null;
-}
-
-function extractPropertyPrice(listing: Listing, meta: any): number | null {
-  const m1 = meta?.property_price ?? meta?.price ?? meta?.valuation;
-  const d1 = getDetail<unknown>(listing.listing?.listingDetails, 'propertyPrice');
-  return extractNumber(m1) ?? extractNumber(d1);
-}
+import { extractPropertyPrice, extractTokenPrice, norm, parseRange } from './utils';
 
 export const maxDuration = 300;
 
@@ -184,16 +111,15 @@ export default async function Marketplace({
       const city = norm(addressTownCity);
       const countryFromMeta = norm(meta.country);
 
-      const type =
-        norm(meta.property_type) ||
-        norm(meta.type) ||
-        norm(getDetail<string>(l.listing?.listingDetails, 'propertyType'));
+      const propertyType = norm(meta.property_type);
 
       const propPrice = extractPropertyPrice(l, meta);
       const tokenPrice = extractTokenPrice(l, meta);
 
       if (propertyTypeParam && propertyTypeParam !== 'all') {
-        const match = type.replace(/[^a-z]/g, '') === propertyTypeParam.replace(/[^a-z]/g, '');
+        const match =
+          propertyType.toLowerCase().replace(/[^a-z0-9]/g, '') ===
+          propertyTypeParam.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (!match) return false;
       }
 
@@ -210,7 +136,8 @@ export default async function Marketplace({
       if (tpMax != null && tokenPrice != null && tokenPrice > tpMax) return false;
 
       if (q) {
-        const hay = `${l.listing?.listingId} ${propertyName} ${address} ${type}`.toLowerCase();
+        const hay =
+          `${l.listing?.listingId} ${propertyName} ${address} ${propertyType}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
