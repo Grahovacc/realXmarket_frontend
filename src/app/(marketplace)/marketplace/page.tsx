@@ -39,14 +39,14 @@ export default async function Marketplace({ searchParams }: MarketplaceProps) {
     value
   }));
 
-  const q = norm(searchParams?.q ?? '');
+  const search = norm(searchParams?.search ?? '');
   const propertyTypeParam = norm(searchParams?.propertyType ?? '');
   const countryParam = norm(searchParams?.country ?? '');
   const cityParam = norm(searchParams?.city ?? '');
   const [ppMin, ppMax] = parseRange(searchParams?.propertyPrice);
   const [tpMin, tpMax] = parseRange(searchParams?.tokenPrice);
 
-  const filtered = listingData.filter(l => {
+  const filteredListings = listingData.filter(l => {
     try {
       const meta = l.metadata ? JSON.parse(l.metadata) : {};
 
@@ -83,10 +83,10 @@ export default async function Marketplace({ searchParams }: MarketplaceProps) {
       if (tpMin != null && tokenPrice != null && tokenPrice < tpMin) return false;
       if (tpMax != null && tokenPrice != null && tokenPrice > tpMax) return false;
 
-      if (q) {
-        const hay =
+      if (search) {
+        const property =
           `${l.listing?.listingId} ${propertyName} ${address} ${propertyType}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+        if (!property.includes(search)) return false;
       }
 
       return true;
@@ -96,23 +96,12 @@ export default async function Marketplace({ searchParams }: MarketplaceProps) {
   });
 
   const suggestions: { title: string; subtitle: string }[] = [];
-  const seen = new Set<string>();
-  for (const l of filtered) {
+  for (const l of filteredListings) {
     try {
       const meta = l.metadata ? JSON.parse(l.metadata) : {};
       const propertyName = (meta.property_name || meta.title || '').toString().trim();
       const city = (meta.address_town_city || '').toString().trim();
       const postcode = (meta.postcode || meta.zip || '').toString().trim();
-
-      const key =
-        (propertyName ? propertyName.toLowerCase() : '') +
-        '|' +
-        (city ? city.toLowerCase() : '') +
-        '|' +
-        String(l.listing?.listingId);
-
-      if (seen.has(key)) continue;
-      seen.add(key);
 
       const title = propertyName || String(l.listing?.listingId);
       if (!title) continue;
@@ -144,9 +133,9 @@ export default async function Marketplace({ searchParams }: MarketplaceProps) {
           </div>
         </div>
 
-        {filtered.length ? (
+        {filteredListings.length ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {filtered.map(listing => {
+            {filteredListings.map(listing => {
               const data = listing.metadata ? JSON.parse(listing.metadata) : {};
               return (
                 <MarketCard

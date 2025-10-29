@@ -66,7 +66,7 @@ export default function FilterTabs({
   const propertyTypeParams = searchParams?.get('propertyType');
   const countryParams = searchParams?.get('country');
   const cityParams = searchParams?.get('city');
-  const qParams = searchParams?.get('q') || '';
+  const searchParam = searchParams?.get('search') || '';
 
   const createQueryString = useCallback(
     (params: Record<string, string | number | null>) => {
@@ -151,23 +151,26 @@ export default function FilterTabs({
   }, [city, createQueryString, pathname, router]);
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(qParams);
+  const [searchTerm, setSearchTerm] = useState(searchParam);
   const debouncedQ = useDebounce(searchTerm, 400);
 
   useEffect(() => {
     startTransition(() => {
       const val = normalize(debouncedQ);
-      const qs = createQueryString({ q: val ? val : null });
-      router.push(`${pathname}?${qs}`, { scroll: false });
+      const search = createQueryString({ search: val ? val : null });
+      router.push(`${pathname}?${search}`, { scroll: false });
     });
   }, [debouncedQ, createQueryString, pathname, router]);
 
   const filteredSuggestions = useMemo(() => {
     const source = suggestions ?? [];
-    const q = normalize(searchTerm);
-    if (!q) return source.slice(0, 20);
+    const search = normalize(searchTerm);
+    if (!search) return source.slice(0, 20);
     return source
-      .filter(s => s.title.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q))
+      .filter(
+        s =>
+          s.title.toLowerCase().includes(search) || s.subtitle.toLowerCase().includes(search)
+      )
       .slice(0, 20);
   }, [searchTerm, suggestions]);
 
