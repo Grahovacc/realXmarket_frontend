@@ -1,83 +1,31 @@
 import MarketCard from '@/components/cards/market-card';
-import {
-  checkBlock,
-  getAllAssets,
-  getAllOngoingListings,
-  getItemMetadata
-} from '@/lib/queries';
-import { Listing, ListingDetails } from '@/types';
+import { getAllOngoingListings } from '@/lib/queries';
 import FilterTabs from './filter-tabs';
-import { hexToString } from '@/lib/utils';
 import { Shell } from '@/components/shell';
-import { generatePresignedUrl } from '@/lib/s3';
 import { Button } from '@/components/ui/button';
 import { Suspense } from 'react';
-import { extractPropertyPrice, extractTokenPrice, norm, parseRange } from './utils';
+import {
+  extractPropertyPrice,
+  extractTokenPrice,
+  fetchListingMetadata,
+  norm,
+  parseRange
+} from './utils';
 
+// This doesn't seem to be used anywhere.
 export const maxDuration = 300;
 
-export default async function Marketplace({
-  searchParams
-}: {
+type MarketplaceProps = {
   searchParams?: Record<string, string>;
-}) {
+};
+
+export default async function Marketplace({ searchParams }: MarketplaceProps) {
   const rawListings = await getAllOngoingListings();
-  await getAllAssets();
 
-  const listingData: Array<
-    Listing & {
-      fileUrls: string[];
-      isExpired: boolean;
-    }
-  > = (
-    await Promise.all(
-      rawListings.map(async (base: any) => {
-        if (!base?.listingDetails || typeof base.listingDetails !== 'object') return undefined;
-
-        const blockNumber = Number(
-          String(base.listingDetails.listingExpiry || '').replace(/,/g, '')
-        );
-        const isExpired = await checkBlock(blockNumber);
-
-        const metadata = await getItemMetadata(
-          base.listingDetails.collectionId,
-          base.listingDetails.itemId
-        );
-
-        const metadataStr = metadata?.data?.startsWith?.('0x')
-          ? hexToString(metadata.data)
-          : metadata?.data ?? '';
-
-        let fileUrls: string[] = [];
-        try {
-          if (metadataStr && typeof metadataStr === 'string') {
-            const d = JSON.parse(metadataStr);
-            if (Array.isArray(d.files)) {
-              fileUrls = await Promise.all(
-                d.files
-                  .filter((fileKey: string) => fileKey.split('/')[2] === 'property_image')
-                  .map(async (fileKey: string) => await generatePresignedUrl(fileKey))
-              );
-            }
-          }
-        } catch {}
-
-        const listing: Listing = {
-          listing: { listingDetails: base.listingDetails, listingId: base.listingId },
-          tokenRemaining: base?.listingDetails?.listedTokenAmount,
-          metadata: metadataStr,
-          fileUrls
-        } as any;
-
-        return { ...listing, fileUrls, isExpired };
-      })
-    )
-  ).filter(Boolean) as any;
-
-  const baseVisible = listingData.filter(x => !x.isExpired);
+  const listingData = await fetchListingMetadata(rawListings.filter(l => l !== null));
 
   const townCitySet = new Map<string, string>();
-  for (const l of baseVisible) {
+  for (const l of listingData) {
     try {
       const meta = l.metadata ? JSON.parse(l.metadata) : {};
       const city = (meta.address_town_city || '').toString().trim();
@@ -98,7 +46,7 @@ export default async function Marketplace({
   const [ppMin, ppMax] = parseRange(searchParams?.propertyPrice);
   const [tpMin, tpMax] = parseRange(searchParams?.tokenPrice);
 
-  const filtered = baseVisible.filter(l => {
+  const filtered = listingData.filter(l => {
     try {
       const meta = l.metadata ? JSON.parse(l.metadata) : {};
 

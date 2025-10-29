@@ -1,4 +1,8 @@
+import { checkBlock, getItemMetadata } from '@/lib/queries';
+import { generatePresignedUrl } from '@/lib/s3';
+import { hexToString } from '@/lib/utils';
 import { Listing } from '@/types';
+import { AnyJson } from '@polkadot/types/types';
 
 export function getKeyValue<T = unknown>(obj: unknown, key: string): T | undefined {
   if (obj && typeof obj === 'object' && key in (obj as Record<string, unknown>)) {
@@ -71,4 +75,57 @@ export function extractPropertyPrice(listing: Listing, meta: any): number | null
   const m1 = meta?.property_price ?? meta?.price ?? meta?.valuation;
   const d1 = getKeyValue<unknown>(listing.listing?.listingDetails, 'propertyPrice');
   return extractNumber(m1) ?? extractNumber(d1);
+}
+
+export async function fetchListingMetadata(
+  rawListings: Array<{ listingId: AnyJson; listingDetails: AnyJson }>
+): Promise<Array<Listing>> {
+  const listingData: Array<Listing> = (
+    await Promise.all(
+      rawListings.flatMap(async (listing: any) => {
+        if (!listing?.listingDetails || typeof listing.listingDetails !== 'object')
+          return undefined;
+
+        const blockNumber = Number(
+          String(listing.listingDetails.listingExpiry || '').replace(/,/g, '')
+        );
+        const expired = await checkBlock(blockNumber);
+        if (expired) return null;
+
+        const metadata = await getItemMetadata(
+          listing.listingDetails.collectionId,
+          listing.listingDetails.itemId
+        );
+
+        const metadataStr = metadata?.data?.startsWith?.('0x')
+          ? hexToString(metadata.data)
+          : metadata?.data ?? '';
+
+        let fileUrls: string[] = [];
+        try {
+          if (metadataStr && typeof metadataStr === 'string') {
+            const d = JSON.parse(metadataStr);
+            if (Array.isArray(d.files)) {
+              fileUrls = await Promise.all(
+                d.files
+                  .filter((fileKey: string) => fileKey.split('/')[2] === 'property_image')
+                  .map(async (fileKey: string) => await generatePresignedUrl(fileKey))
+              );
+            }
+          }
+        } catch (error) {
+          // Error generating file URLs, continue with empty array
+        }
+
+        return {
+          listing: listing,
+          tokenRemaining: listing?.listingDetails?.listedTokenAmount,
+          metadata: metadataStr,
+          fileUrls
+        };
+      })
+    )
+  ).filter(Boolean) as any;
+
+  return listingData;
 }
