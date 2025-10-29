@@ -114,7 +114,11 @@ export default async function Marketplace({ searchParams }: MarketplaceProps) {
   return (
     <Shell variant={'basic'} className="gap-10 pb-32">
       <Suspense fallback={<div>Loading filters...</div>}>
-        <FilterTabs townCityOptions={townCityOptions} suggestions={suggestions} />
+        <FilterTabs
+          townCityOptions={townCityOptions}
+          suggestions={suggestions}
+          searchParams={searchParams}
+        />
       </Suspense>
 
       <div className="md:px={[50]} flex flex-col gap-6 px-4">

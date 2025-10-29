@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { FilterInput } from './components/filter-input';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useDebounce } from '@/hooks/use-debounce';
+import { norm, parseRange } from './utils';
 
 type SelectLabelType = React.ComponentProps<'select'> & React.ComponentProps<'label'>;
 
@@ -42,16 +43,20 @@ const COUNTRY_OPTIONS = [
 const normalize = (v: string) =>
   (v ?? '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
 
-export default function FilterTabs({
-  townCityOptions,
-  suggestions
-}: {
+type FilterTabsProps = {
+  searchParams?: Record<string, string>;
   townCityOptions?: { name: string; value: string }[];
   suggestions?: { title: string; subtitle: string }[];
-}) {
+};
+
+export default function FilterTabs({
+  townCityOptions,
+  suggestions,
+  searchParams
+}: FilterTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const _searchParams = useSearchParams();
 
   const TOWN_CITY_OPTIONS = useMemo(
     () =>
@@ -61,16 +66,29 @@ export default function FilterTabs({
     [townCityOptions]
   );
 
-  const propertyPriceParams = searchParams?.get('propertyPrice');
-  const tokenPriceParams = searchParams?.get('tokenPrice');
-  const propertyTypeParams = searchParams?.get('propertyType');
-  const countryParams = searchParams?.get('country');
-  const cityParams = searchParams?.get('city');
-  const searchParam = searchParams?.get('search') || '';
+  const searchParam = norm(searchParams?.search ?? '');
+  const propertyTypeParam = norm(searchParams?.propertyType ?? '');
+  const countryParam = norm(searchParams?.country ?? '');
+  const cityParam = norm(searchParams?.city ?? '');
+  const [ppMin, ppMax] = parseRange(searchParams?.propertyPrice);
+  const [tpMin, tpMax] = parseRange(searchParams?.tokenPrice);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const [city, setCity] = useState<string | null>(cityParam ?? null);
+  const [propertyType, setPropertyType] = useState<string | null>(propertyTypeParam ?? null);
+  const [country, setCountry] = useState<string | null>(countryParam ?? null);
+  const [searchTerm, setSearchTerm] = useState(searchParam ?? null);
+  const [propertyPrice, setPropertyPrice] = useState<(number | null)[] | null>(
+    ppMin && ppMax ? [ppMin, ppMax] : null
+  );
+  const [tokenPrice, setTokenPrice] = useState<(number | null)[] | null>(
+    tpMin && tpMax ? [tpMin, tpMax] : null
+  );
 
   const createQueryString = useCallback(
     (params: Record<string, string | number | null>) => {
-      const next = new URLSearchParams(searchParams?.toString());
+      const next = new URLSearchParams(_searchParams?.toString());
       for (const [key, value] of Object.entries(params)) {
         if (value === null || value === '') next.delete(key);
         else next.set(key, String(value));
@@ -80,7 +98,6 @@ export default function FilterTabs({
     [searchParams]
   );
 
-  const [propertyType, setPropertyType] = useState<string | null>(propertyTypeParams);
   useEffect(() => {
     if (propertyType == null) return;
     startTransition(() => {
@@ -90,12 +107,6 @@ export default function FilterTabs({
     });
   }, [propertyType, createQueryString, pathname, router]);
 
-  const isPropertyPrice = propertyPriceParams
-    ? propertyPriceParams.split('-').map(s => (s === '' ? null : Number(s)))
-    : null;
-  const [propertyPrice, setPropertyPrice] = useState<(number | null)[] | null>(
-    isPropertyPrice as (number | null)[] | null
-  );
   const debouncedPropertyPrice = useDebounce(propertyPrice, 700);
 
   useEffect(() => {
@@ -110,12 +121,6 @@ export default function FilterTabs({
     });
   }, [debouncedPropertyPrice, createQueryString, pathname, router]);
 
-  const isTokenPrice = tokenPriceParams
-    ? tokenPriceParams.split('-').map(s => (s === '' ? null : Number(s)))
-    : null;
-  const [tokenPrice, setTokenPrice] = useState<(number | null)[] | null>(
-    (isTokenPrice as (number | null)[] | null) ?? [null, null]
-  );
   const debounceTokenPrice = useDebounce(tokenPrice, 700);
 
   useEffect(() => {
@@ -130,7 +135,6 @@ export default function FilterTabs({
     });
   }, [debounceTokenPrice, createQueryString, pathname, router]);
 
-  const [country, setCountry] = useState<string | null>(countryParams);
   useEffect(() => {
     if (country == null) return;
     startTransition(() => {
@@ -140,9 +144,8 @@ export default function FilterTabs({
     });
   }, [country, createQueryString, pathname, router]);
 
-  const [city, setCity] = useState<string | null>(cityParams);
   useEffect(() => {
-    if (city == null) return;
+    if (!city) return;
     startTransition(() => {
       const val = normalize(city);
       const qs = createQueryString({ city: val === 'all' ? null : val });
@@ -150,17 +153,15 @@ export default function FilterTabs({
     });
   }, [city, createQueryString, pathname, router]);
 
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(searchParam);
-  const debouncedQ = useDebounce(searchTerm, 400);
+  const debouncedSearch = useDebounce(searchTerm, 400);
 
   useEffect(() => {
     startTransition(() => {
-      const val = normalize(debouncedQ);
+      const val = normalize(debouncedSearch);
       const search = createQueryString({ search: val ? val : null });
       router.push(`${pathname}?${search}`, { scroll: false });
     });
-  }, [debouncedQ, createQueryString, pathname, router]);
+  }, [debouncedSearch, createQueryString, pathname, router]);
 
   const filteredSuggestions = useMemo(() => {
     const source = suggestions ?? [];
@@ -182,13 +183,13 @@ export default function FilterTabs({
         });
         setPropertyType(null);
       }
-      if (isPropertyPrice !== null && isPropertyPrice[1] === 0) {
+      if (ppMin !== null && ppMax === 0) {
         router.push(`${pathname}?${createQueryString({ propertyPrice: null })}`, {
           scroll: false
         });
         setPropertyPrice(null);
       }
-      if (isTokenPrice !== null && isTokenPrice[1] === 0) {
+      if (tpMin !== null && tpMax === 0) {
         router.push(`${pathname}?${createQueryString({ tokenPrice: null })}`, {
           scroll: false
         });
@@ -255,18 +256,21 @@ export default function FilterTabs({
             label="COUNTRY"
             placeholder="Show all"
             options={COUNTRY_OPTIONS}
+            value={country ?? undefined}
             setOption={setCountry}
           />
           <FilterSelect
             label="TOWN CITY"
             placeholder="Show all"
             options={TOWN_CITY_OPTIONS}
+            value={city ?? undefined}
             setOption={setCity}
           />
           <FilterSelect
             label="PROPERTY TYPE"
             placeholder="Show all"
             options={PROPERTY_TYPE_OPTIONS}
+            value={propertyType ?? undefined}
             setOption={setPropertyType}
           />
           <PopoverTrigger>
@@ -386,13 +390,21 @@ const SelectButton = ({ label, className, placeholder, ...props }: SelectButtonP
 );
 
 export interface SelectProps extends SelectLabelType {
+  value?: string;
   label: string;
   options?: { name: string; value: string }[];
   placeholder: string;
   setOption: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const FilterSelect = ({ label, options, placeholder, htmlFor, setOption }: SelectProps) => (
+const FilterSelect = ({
+  label,
+  value,
+  options,
+  placeholder,
+  htmlFor,
+  setOption
+}: SelectProps) => (
   <div className="isolate flex w-full flex-col gap-2">
     {label ? (
       <label htmlFor={htmlFor} className="text-[16px]/[24px] font-medium uppercase">
@@ -400,6 +412,7 @@ const FilterSelect = ({ label, options, placeholder, htmlFor, setOption }: Selec
       </label>
     ) : null}
     <Select
+      value={value}
       onValueChange={value => {
         const selectedOption = options?.find(opt => opt.value === value);
         if (selectedOption) setOption(selectedOption.value);
