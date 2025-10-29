@@ -105,21 +105,21 @@ export default async function Marketplace({
   > = (
     await Promise.all(
       rawListings.map(async (base: any) => {
-        if (!base?.listingDetails || typeof base.tingDetails !== 'object') return undefined;
+        if (!base?.listingDetails || typeof base.listingDetails !== 'object') return undefined;
 
         const blockNumber = Number(
           String(base.listingDetails.listingExpiry || '').replace(/,/g, '')
         );
         const isExpired = await checkBlock(blockNumber);
 
-        const metaData = await getItemMetadata(
+        const metadata = await getItemMetadata(
           base.listingDetails.collectionId,
           base.listingDetails.itemId
         );
 
-        const metadataStr = metaData?.data?.startsWith?.('0x')
-          ? hexToString(metaData.data)
-          : metaData?.data ?? '';
+        const metadataStr = metadata?.data?.startsWith?.('0x')
+          ? hexToString(metadata.data)
+          : metadata?.data ?? '';
 
         let fileUrls: string[] = [];
         try {
