@@ -264,7 +264,6 @@ export default function FilterTabs({
         </Button>
       </div>
 
-      {/* Filters grid */}
       <Popover>
         <div className="hidden w-full grid-cols-5 gap-6 border-b px-4 pb-10 md:px-[50px] lg:grid">
           <FilterSelect
@@ -289,12 +288,10 @@ export default function FilterTabs({
             setOption={setPropertyType}
           />
 
-          {/* Property price */}
           <PopoverTrigger>
             <SelectButton label="PROPERTY PRICE" placeholder="Max Price" />
           </PopoverTrigger>
 
-          {/* Token price */}
           <Popover>
             <PopoverTrigger>
               <SelectButton label="TOKEN PRICE" placeholder="Max Price" />
@@ -335,7 +332,6 @@ export default function FilterTabs({
           </Popover>
         </div>
 
-        {/* Property price popover content */}
         <PopoverContent
           align="start"
           className="grid w-[506px] gap-6 rounded-lg px-3 py-[18px]"
