@@ -22,6 +22,7 @@ import { FilterInput } from './components/filter-input';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useDebounce } from '@/hooks/use-debounce';
 import { norm, parseRange } from './utils';
+import { Button } from '@/components/ui/button';
 
 type SelectLabelType = React.ComponentProps<'select'> & React.ComponentProps<'label'>;
 
@@ -39,9 +40,6 @@ const COUNTRY_OPTIONS = [
   { name: 'All', value: 'all' },
   { name: 'United kingdom', value: 'united kingdom' }
 ];
-
-const normalize = (v: string) =>
-  (v ?? '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
 
 type FilterTabsProps = {
   searchParams?: Record<string, string>;
@@ -66,10 +64,10 @@ export default function FilterTabs({
     [townCityOptions]
   );
 
-  const searchParam = norm(searchParams?.search ?? '');
-  const propertyTypeParam = norm(searchParams?.propertyType ?? '');
-  const countryParam = norm(searchParams?.country ?? '');
-  const cityParam = norm(searchParams?.city ?? '');
+  const searchParam = norm(String(searchParams?.search ?? ''));
+  const propertyTypeParam = norm(String(searchParams?.propertyType ?? ''));
+  const countryParam = norm(String(searchParams?.country ?? ''));
+  const cityParam = norm(String(searchParams?.city ?? ''));
   const [ppMin, ppMax] = parseRange(searchParams?.propertyPrice);
   const [tpMin, tpMax] = parseRange(searchParams?.tokenPrice);
 
@@ -78,7 +76,7 @@ export default function FilterTabs({
   const [city, setCity] = useState<string | null>(cityParam ?? null);
   const [propertyType, setPropertyType] = useState<string | null>(propertyTypeParam ?? null);
   const [country, setCountry] = useState<string | null>(countryParam ?? null);
-  const [searchTerm, setSearchTerm] = useState(searchParam ?? null);
+  const [searchTerm, setSearchTerm] = useState<string | null>(searchParam ?? null);
   const [propertyPrice, setPropertyPrice] = useState<(number | null)[] | null>(
     ppMin || ppMax ? [ppMin || 0, ppMax || 0] : null
   );
@@ -95,13 +93,13 @@ export default function FilterTabs({
       }
       return next.toString();
     },
-    [searchParams]
+    [searchParams, _searchParams]
   );
 
   useEffect(() => {
     if (propertyType == null) return;
     startTransition(() => {
-      const val = normalize(propertyType);
+      const val = norm(String(propertyType));
       const qs = createQueryString({ propertyType: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
@@ -138,7 +136,7 @@ export default function FilterTabs({
   useEffect(() => {
     if (country == null) return;
     startTransition(() => {
-      const val = normalize(country);
+      const val = norm(String(country));
       const qs = createQueryString({ country: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
@@ -147,7 +145,7 @@ export default function FilterTabs({
   useEffect(() => {
     if (!city) return;
     startTransition(() => {
-      const val = normalize(city);
+      const val = norm(String(city));
       const qs = createQueryString({ city: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
@@ -157,7 +155,7 @@ export default function FilterTabs({
 
   useEffect(() => {
     startTransition(() => {
-      const val = normalize(debouncedSearch);
+      const val = norm(String(debouncedSearch ?? ''));
       const search = createQueryString({ search: val ? val : null });
       router.push(`${pathname}?${search}`, { scroll: false });
     });
@@ -165,12 +163,11 @@ export default function FilterTabs({
 
   const filteredSuggestions = useMemo(() => {
     const source = suggestions ?? [];
-    const search = normalize(searchTerm);
-    if (!search) return source.slice(0, 20);
+    const s = norm(String(searchTerm ?? ''));
+    if (!s) return source.slice(0, 20);
     return source
       .filter(
-        s =>
-          s.title.toLowerCase().includes(search) || s.subtitle.toLowerCase().includes(search)
+        x => x.title.toLowerCase().includes(s) || x.subtitle.toLowerCase().includes(s)
       )
       .slice(0, 20);
   }, [searchTerm, suggestions]);
@@ -199,9 +196,22 @@ export default function FilterTabs({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleResetFilters = () => {
+    setCity(null);
+    setCountry(null);
+    setPropertyType(null);
+    setSearchTerm(null);
+    setPropertyPrice(null);
+    setTokenPrice(null);
+    setSearchOpen(false);
+
+    router.push('/marketplace');
+    router.refresh();
+  };
+
   return (
     <div className="w-full">
-      <div className="hidden w-full px-4 pb-6 md:px-[50px] lg:block">
+      <div className="flex items-center justify-between px-4 pb-6 md:px-[50px]">
         <Popover open={searchOpen} onOpenChange={setSearchOpen}>
           <PopoverTrigger asChild>
             <div className="w-[520px]">
@@ -218,7 +228,7 @@ export default function FilterTabs({
                 label="Search"
                 type="text"
                 inputMode="text"
-                value={searchTerm}
+                value={searchTerm ?? ''}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder="Start typing…"
               />
@@ -248,8 +258,13 @@ export default function FilterTabs({
             </div>
           </PopoverContent>
         </Popover>
+
+        <Button onClick={handleResetFilters} variant="outline">
+          Reset Filters
+        </Button>
       </div>
 
+      {/* Filters grid */}
       <Popover>
         <div className="hidden w-full grid-cols-5 gap-6 border-b px-4 pb-10 md:px-[50px] lg:grid">
           <FilterSelect
@@ -273,9 +288,13 @@ export default function FilterTabs({
             value={propertyType ?? undefined}
             setOption={setPropertyType}
           />
+
+          {/* Property price */}
           <PopoverTrigger>
             <SelectButton label="PROPERTY PRICE" placeholder="Max Price" />
           </PopoverTrigger>
+
+          {/* Token price */}
           <Popover>
             <PopoverTrigger>
               <SelectButton label="TOKEN PRICE" placeholder="Max Price" />
@@ -315,6 +334,8 @@ export default function FilterTabs({
             </PopoverContent>
           </Popover>
         </div>
+
+        {/* Property price popover content */}
         <PopoverContent
           align="start"
           className="grid w-[506px] gap-6 rounded-lg px-3 py-[18px]"
@@ -362,7 +383,7 @@ export interface SelectButtonProps extends ComponentPropsWithoutRef<'button'> {
 
 const SelectButton = ({ label, className, placeholder, ...props }: SelectButtonProps) => (
   <div className="isolate flex w-full flex-col gap-2">
-    {label ? <p className="text-[16px]/[24px] font-medium uppercase">{label}</p> : null}
+    {label ? <p className="text=[16px]/[24px] text-[16px]/[24px] font-medium uppercase">{label}</p> : null}
     <button
       className={cn(
         'flex w-full items-center justify-between rounded border border-primary/[0.50] bg-background px-3 py-2 font-sans text-[1rem]/[1.5rem] placeholder:text-[#717171] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
