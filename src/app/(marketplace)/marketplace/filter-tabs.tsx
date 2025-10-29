@@ -80,10 +80,10 @@ export default function FilterTabs({
   const [country, setCountry] = useState<string | null>(countryParam ?? null);
   const [searchTerm, setSearchTerm] = useState(searchParam ?? null);
   const [propertyPrice, setPropertyPrice] = useState<(number | null)[] | null>(
-    ppMin && ppMax ? [ppMin, ppMax] : null
+    ppMin || ppMax ? [ppMin || 0, ppMax || 0] : null
   );
   const [tokenPrice, setTokenPrice] = useState<(number | null)[] | null>(
-    tpMin && tpMax ? [tpMin, tpMax] : null
+    tpMin || tpMax ? [tpMin || 0, tpMax || 0] : null
   );
 
   const createQueryString = useCallback(
