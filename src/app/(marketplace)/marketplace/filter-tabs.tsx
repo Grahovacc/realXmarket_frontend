@@ -41,9 +41,6 @@ const COUNTRY_OPTIONS = [
   { name: 'United kingdom', value: 'united kingdom' }
 ];
 
-const normalize = (v: string | null | undefined) =>
-  (v ?? '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
-
 type FilterTabsProps = {
   searchParams?: Record<string, string>;
   townCityOptions?: { name: string; value: string }[];
@@ -67,10 +64,10 @@ export default function FilterTabs({
     [townCityOptions]
   );
 
-  const searchParam = norm(searchParams?.search ?? '');
-  const propertyTypeParam = norm(searchParams?.propertyType ?? '');
-  const countryParam = norm(searchParams?.country ?? '');
-  const cityParam = norm(searchParams?.city ?? '');
+  const searchParam = norm(searchParams?.search);
+  const propertyTypeParam = norm(searchParams?.propertyType);
+  const countryParam = norm(searchParams?.country);
+  const cityParam = norm(searchParams?.city);
   const [ppMin, ppMax] = parseRange(searchParams?.propertyPrice);
   const [tpMin, tpMax] = parseRange(searchParams?.tokenPrice);
 
@@ -103,7 +100,7 @@ export default function FilterTabs({
   useEffect(() => {
     if (propertyType == null) return;
     startTransition(() => {
-      const val = normalize(propertyType);
+      const val = norm(propertyType);
       const qs = createQueryString({ propertyType: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
@@ -140,7 +137,7 @@ export default function FilterTabs({
   useEffect(() => {
     if (country == null) return;
     startTransition(() => {
-      const val = normalize(country);
+      const val = norm(country);
       const qs = createQueryString({ country: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
@@ -149,7 +146,7 @@ export default function FilterTabs({
   useEffect(() => {
     if (!city) return;
     startTransition(() => {
-      const val = normalize(city);
+      const val = norm(city);
       const qs = createQueryString({ city: val === 'all' ? null : val });
       router.push(`${pathname}?${qs}`, { scroll: false });
     });
@@ -159,7 +156,7 @@ export default function FilterTabs({
 
   useEffect(() => {
     startTransition(() => {
-      const val = normalize(debouncedSearch);
+      const val = norm(debouncedSearch);
       const search = createQueryString({ search: val ? val : null });
       router.push(`${pathname}?${search}`, { scroll: false });
     });
@@ -167,10 +164,13 @@ export default function FilterTabs({
 
   const filteredSuggestions = useMemo(() => {
     const source = suggestions ?? [];
-    const search = normalize(searchTerm);
+    const search = norm(searchTerm);
     if (!search) return source.slice(0, 20);
     return source
-      .filter(s => s.title.toLowerCase().includes(search) || s.subtitle.toLowerCase().includes(search))
+      .filter(
+        s =>
+          s.title.toLowerCase().includes(search) || s.subtitle.toLowerCase().includes(search)
+      )
       .slice(0, 20);
   }, [searchTerm, suggestions]);
 
