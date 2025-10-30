@@ -232,7 +232,7 @@ export default function FilterTabs({
                 type="text"
                 inputMode="text"
                 value={searchTerm ?? ''}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value ? e.target.value : null)}
                 placeholder="Start typing…"
               />
               <div className="max-h-64 overflow-auto rounded-md border border-primary/20">
