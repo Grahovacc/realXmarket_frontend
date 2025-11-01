@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useWalletContext } from '@/context/wallet-context';
 
-function favKey(addr?: string) {
-  return `market_favorites_v1:${addr || 'guest'}`;
+export function favKey(addr?: string) {
+  return `market_favorites:${addr || 'guest'}`;
 }
 
-function readFavs(addr?: string): string[] {
+export function readFavs(addr?: string): string[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(favKey(addr));
@@ -16,6 +16,13 @@ function readFavs(addr?: string): string[] {
   } catch {
     return [];
   }
+}
+
+export function writeFavs(next: string[], addr?: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(favKey(addr), JSON.stringify([...new Set(next)]));
+  } catch {}
 }
 
 export default function FavoritesToggle() {

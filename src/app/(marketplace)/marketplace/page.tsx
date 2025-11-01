@@ -21,7 +21,7 @@ import { Shell } from '@/components/shell';
 import { generatePresignedUrl } from '@/lib/s3';
 import { Button } from '@/components/ui/button';
 import { Suspense } from 'react';
-import FavoritesToggle from './favorites-toggle';
+import FavoritesToggle from './components/favorites-toggle';
 
 export const maxDuration = 300;
 export default async function Marketplace() {

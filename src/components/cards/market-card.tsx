@@ -9,28 +9,7 @@ import { ImageIcon } from 'lucide-react';
 import { formatAPY, formatPrice, truncate } from '@/lib/utils';
 import ImageComponent from '../image-component';
 import { useWalletContext } from '@/context/wallet-context';
-
-function favKey(addr?: string) {
-  return `market_favorites_v1:${addr || 'guest'}`;
-}
-
-function readFavs(addr?: string): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(favKey(addr));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeFavs(next: string[], addr?: string) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(favKey(addr), JSON.stringify([...new Set(next)]));
-  } catch {}
-}
+import { favKey, readFavs, writeFavs } from '@/app/(marketplace)/marketplace/components/favorites-toggle';
 
 export default function MarketCard({
   id,
